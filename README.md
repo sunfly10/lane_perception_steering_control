@@ -8,6 +8,7 @@ CARLA 시뮬레이터의 내장 경로 계획 API를 배제하고, 비전 데이
 
 ## 1. 설치 및 실행
 [https://carla.org/], [https://carla.readthedocs.io/en/latest/]  <-- 홈페이지, 공식 문서 참고하여 설치 및 실행
+
 아래의 두 명령어를 통해 시뮬레이션 환경 진행함.
     • conda activate carla_env: 가상환경 활성화
     • ./CarlaUE4.sh -quality-level=Low: 시뮬레이터 사용
