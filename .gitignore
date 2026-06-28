@@ -216,3 +216,36 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# ==========================================
+# Custom ignores for Vision & CARLA Simulator
+# ==========================================
+
+# 1. 영상 및 이미지 결과물 (용량 초과 방지)
+*.mp4
+*.avi
+*.mkv
+*.png
+*.jpg
+*.jpeg
+
+# 2. CARLA 시뮬레이터 및 제어 로그 파일
+_out/
+logs/
+*.log
+*.csv
+.carla/
+
+# 3. 모델 가중치 파일 (AI 모델을 추가로 붙일 경우 대비)
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# 4. OS 시스템 생성 파일 (지저분한 파일 업로드 방지)
+.DS_Store
+Thumbs.db
+
+
+
