@@ -21,16 +21,48 @@ CARLA 시뮬레이터의 내장 경로 계획 API를 배제하고, 비전 데이
 | <img width="1043" height="769" alt="Screenshot from 2026-06-28 20-59-54" src="https://github.com/user-attachments/assets/ef4629b5-61f0-4ee6-9038-0b7a2a9a55cf" /> | <img width="1043" height="769" alt="Screenshot from 2026-06-28 21-00-12" src="https://github.com/user-attachments/assets/5c90dff6-4b06-4083-b863-428f30d08405" />| <img width="1043" height="769" alt="Screenshot from 2026-06-28 21-00-01" src="https://github.com/user-attachments/assets/85fdc9c8-b81e-4b77-8bd2-807d5bfcdcb5" />|
 | *사다리꼴 형태의 원근 왜곡 발생* | *IPM 변환 및 HSV 동적 마스킹* | *차량의 물리적 위치 검증용* |
 
-### 2.2 동적 차선 변경 및 제어 (Dynamic Lane Changing)
+### 2.2 동적 차선 변경 및 제어
 | 1. 직진 차선 유지 (KEEPING) | 2. 차선 변경 수행 (CHANGING) | 3. 차선 변경 완료 및 안착 |
 | :---: | :---: | :---: |
-| <img src="Screenshot from 2026-06-28 21-00-20.jpg" width="300"/> | <img src="Screenshot from 2026-06-28 21-00-34.jpg" width="300"/> | <img src="Screenshot from 2026-06-28 21-00-44.jpg" width="300"/> |
+| <img width="1043" height="769" alt="Screenshot from 2026-06-28 21-00-20" src="https://github.com/user-attachments/assets/8335f574-ffa2-4b26-b64a-6b0bde4b9426" /> | <img width="1043" height="769" alt="Screenshot from 2026-06-28 21-00-34" src="https://github.com/user-attachments/assets/3a1b5387-50bd-40b3-9734-1a669891a6f4" /> | <img width="1018" height="725" alt="Screenshot from 2026-06-28 21-00-44" src="https://github.com/user-attachments/assets/da1f0d85-7fa0-4ac4-8491-1e669f6e7365" /> |
 | *오차 -1.8px (PID 데드존 개입)* | *피드포워드 S-Curve 궤적 추종* | *안착 제어 모드 발동 후 중앙 정렬* |
 
 ### 2.3 동역학 조향 제어 안정성 그래프
 | Cross Track Error (횡방향 오차) | Steering Angle (실시간 조향각) |
 | :---: | :---: |
-| <img src="Screenshot from 2026-06-28 21-00-54.png" width="400"/> | <img src="Screenshot from 2026-06-28 21-00-59.png" width="400"/> |
+| <img width="1081" height="607" alt="Screenshot from 2026-06-28 21-00-54" src="https://github.com/user-attachments/assets/c62fb41b-f4ca-4324-87a7-9193710bcdc3" /> | <img width="1081" height="607" alt="Screenshot from 2026-06-28 21-00-59" src="https://github.com/user-attachments/assets/944a4eca-d442-4109-bd63-12734fe0f7a0" /> |
 | *차선 변경 시 발생하는 오차를 오버슈트 없이 즉각 수렴시킴* | *물리적 한계를 고려한 부드러운 카운터 스티어링 (S자 파형) 구현* |
 
 ---
+
+## 📚 3. 핵심 이론 및 알고리즘
+
+단순한 비전 라이브러리 사용을 넘어, 본 프로젝트에 적용된 수학적/동역학적 핵심 이론은 다음과 같습니다.
+
+### 💡 3.1 역투영 변환(IPM) 및 호모그래피 행렬 설계
+카메라로 획득한 2D 영상은 소실점(Vanishing Point)으로 인해 사다리꼴 형태의 원근 투영 왜곡이 발생합니다. 본 연구에서는 차선의 직진 형태를 복원하여 직교 좌표계에서 경로를 모델링하기 위해 호모그래피(Homography) 3x3 투영 행렬 H를 설계했습니다.
+* $h_{11}, h_{12}, h_{21}, h_{22}$: 크기 및 회전 등의 2차원 선형 변환.
+* $h_{31}$: 원근 변환(Perspective Transformation)을 결정하는 핵심 요소로, 소실점 투영 효과를 조작하여 굴곡진 차선을 평행한 직선 형태로 정규화(BEV)합니다.
+
+### 💡 3.2 동적 HSV 임계값 및 비대칭 모폴로지
+가우시안 블러링($G(x,y)$)으로 고주파 노이즈를 감쇄시킨 후, 터널이나 나무 그림자로 인한 급격한 조명 변화에 대응하기 위해 동적 적응형 임계값을 고안했습니다.
+* 매 프레임 V(명도) 채널의 평균 밝기를 실시간 계산하여 흰색(130~210)과 노란색(40~100) 차선의 검출 하한선을 유동적으로 Clipping합니다.
+* 픽셀 노이즈 제거를 위해 $3\times3$ 열기 연산을 적용하고, 세로로 긴 차선의 물리적 특성을 반영해 $35\times5$ 비대칭 커널의 닫기 연산을 수행하여 끊어진 점선을 하나의 실선으로 부드럽게 복원합니다.
+
+### 💡 3.3 5차 다항식(Quintic Polynomial) 기반 플래닝
+차선 변경 시 3차 다항식 궤적을 추종할 경우 발생하는 가속도(Jerk)의 불연속성과 물리적 스파이크 현상을 억제하기 위해, 궤적의 시작($t=0$)과 종료($t=1$) 지점에서 다음 6가지 경계조건을 만족하는 5차 다항식 궤적을 설계했습니다.
+1. $f(0)=0, f'(0)=0, f''(0)=0$ (시작점 위치, 속도, 가속도 = 0)
+2. $f(1)=1, f'(1)=0, f''(1)=0$ (종료점 위치, 속도, 가속도 = 0)
+
+위 조건들을 가우스 소거법으로 연립하여 도출된 최종 궤적 방정식은 $f(t) = 6t^5 - 15t^4 + 10t^3$ 입니다. 
+이는 진행도 50%($t=0.5$)를 기점으로 수학적인 부호 반전을 유도하며, 차량을 일자로 정렬하기 위한 카운터 스티어링(Counter-steering)을 동역학적 충격 없이 완벽하게 수행합니다.
+
+### 💡 3.4 제어 오실레이션 억제를 위한 동적 게인 스케줄링
+* **데드존(Deadzone) 설계:** 직진 시 오차 절댓값이 2.0 픽셀 미만일 때는 PID 제어 개입을 0으로 억제하여 스티어링 휠의 미세 진동을 차단했습니다.
+* **안착 모드 (Settling Mode):** 피드포워드 주행(차선 변경)이 끝나고 카메라 비전 모드로 복귀하는 찰나, 발생할 수 있는 진동을 방지하기 위해 복귀 직후 약 1초(30프레임) 동안 $K_p$와 $K_d$ 계수를 폭발적으로 증폭시켰습니다. 이를 통해 차체를 목표 궤적에 강제로 고정시키는 동적 게인 스케줄링을 성공적으로 구현했습니다.
+
+---
+
+## 🚀 4. 향후 과제
+* **가상 차선 예측(Lane Borrowing) 고도화:** 교차로 등 단일 차선만 인식될 때 실측된 평균 차선 폭을 바탕으로 가상의 차선을 투영하는 로직을 곡선 구간의 동적 캘리브레이션 기반으로 고도화.
+* **칼만 필터(Kalman Filter) 융합 안정화:** 일시적 차선 소실 구역에서 카메라 인지 신뢰도와 차량 동역학 모델(속도, Yaw Rate)을 융합하는 Kalman Filter를 적용하여 극한의 환경에서도 조향 명령의 연속성 100% 보장.
